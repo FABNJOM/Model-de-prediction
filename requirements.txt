@@ -1,6 +1,8 @@
+streamlit
+requests
 fastapi
-uvicorn[standard]
+uvicorn
 scikit-learn
 pandas
-matplotlib
-joblib  
+numpy
+joblib
