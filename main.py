@@ -1,80 +1,71 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import joblib
 from pydantic import BaseModel
 import numpy as np
-import pandas as pd
 
 app = FastAPI(title="API de Prédiction d'Achat avec KNN")
 
-# Charger le modèle et le scaler (pas d'encoder car c'est déjà 0/1)
-model = joblib.load("model_knn.pkl")  # Ton modèle KNN entraîné
-scaler = joblib.load("scaler.pkl")     # Le StandardScaler que tu as utilisé
+# Autoriser les connexions externes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Définir la classe pour les données d'entrée
+# Charger le modèle et le scaler
+model = joblib.load("model_knn.pkl")
+scaler = joblib.load("scaler.pkl")
+
+# Classe des données d'entrée
 class Personne(BaseModel):
-    age: float          # Âge de la personne
-    salary: float       # EstimatedSalary (salaire estimé)
+    age: float
+    salary: float
 
+# Route accueil
 @app.get("/")
 def accueil():
     return {
-        "message": "Bienvenue sur l'API de Prédiction d'Achat avec KNN!",
-        "info": "Envoyez l'âge et le salaire pour savoir si la personne va acheter"
+        "message": "Bienvenue sur l'API KNN 🚀"
     }
 
+# Route prédiction
 @app.post("/predict")
 def predict(personne: Personne):
-    # Préparer les données
+
+    # Données utilisateur
     data = np.array([[personne.age, personne.salary]])
-    
-    # Normaliser les données (important !)
+
+    # Normalisation
     data_normalized = scaler.transform(data)
-    
-    # Prédire
+
+    # Prédiction
     prediction = model.predict(data_normalized)[0]
-    
-    # Résultat
-    if prediction == 1:
-        resultat = "Achète"
-        message_detail = "✅ Cette personne va ACHETER le produit"
-    else:
-        resultat = "N'achète pas"
-        message_detail = "❌ Cette personne ne va PAS acheter le produit"
-    
+
+    # Probabilités
+    probabilites = model.predict_proba(data_normalized)[0]
+
+    confiance_non_achat = round(probabilites[0] * 100, 2)
+    confiance_achat = round(probabilites[1] * 100, 2)
+
     return {
-        "age": personne.age,
-        "salary": personne.salary,
-        "prediction": int(prediction),
-        "resultat": resultat,
-        "message": message_detail,
-        "probabilites": model.predict_proba(data_normalized)[0].tolist()
+        "achat": bool(prediction),
+        "message": (
+            "Cette personne va acheter"
+            if prediction == 1
+            else "Cette personne ne va pas acheter"
+        ),
+        "confiance": {
+            "achat": confiance_achat,
+            "non_achat": confiance_non_achat
+        }
     }
 
-@app.post("/predict-batch")
-def predict_batch(personnes: list[Personne]):
-    """Prédire pour plusieurs personnes à la fois"""
-    results = []
-    
-    for personne in personnes:
-        data = np.array([[personne.age, personne.salary]])
-        data_normalized = scaler.transform(data)
-        prediction = model.predict(data_normalized)[0]
-        
-        results.append({
-            "age": personne.age,
-            "salary": personne.salary,
-            "prediction": int(prediction),
-            "achat": "Oui" if prediction == 1 else "Non"
-        })
-    
-    return {"predictions": results}
-
+# Health check
 @app.get("/health")
-def health_check():
+def health():
     return {
-        "status": "API en bonne santé",
-        "model_charge": model is not None,
-        "scaler_charge": scaler is not None
+        "status": "OK"
     }
-
-# Pour lancer l'API : uvicorn main:app --reload
