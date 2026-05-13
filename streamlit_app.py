@@ -15,7 +15,7 @@ st.markdown("### Entrez l'âge et le salaire pour savoir si la personne va achet
 st.markdown("---")
 
 # URL de ton API déployée sur Render
-API_URL = "https://model-de-prediction-1.onrender.com/predict"
+API_URL = "https://api-achat.onrender.com/predict"
 
 # Création des deux colonnes pour les inputs
 col1, col2 = st.columns(2)
