@@ -1,45 +1,85 @@
-import streamlit as st
-import numpy as np
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import joblib
+import numpy as np
+from typing import List
 
-# Charger les modèles
-@st.cache_resource
-def load_models():
+app = FastAPI(
+    title="API de Prédiction d'Achat",
+    description="Prédit si une personne va acheter un produit selon son âge et son salaire",
+    version="1.0"
+)
+
+# Charger le modèle et le scaler
+try:
     model = joblib.load("model_knn.pkl")
     scaler = joblib.load("scaler.pkl")
-    return model, scaler
+    print("✅ Modèles chargés avec succès")
+except Exception as e:
+    print(f"❌ Erreur de chargement: {e}")
+    model = None
+    scaler = None
 
-model, scaler = load_models()
+class Personne(BaseModel):
+    age: float
+    salary: float
 
-# Titre
-st.title("🛍️ Prédiction d'Achat")
-st.write("Entrez l'âge et le salaire pour savoir si la personne va acheter")
+@app.get("/")
+def accueil():
+    return {
+        "message": "API de Prédiction d'Achat avec KNN",
+        "endpoints": {
+            "POST /predict": "Prédire pour une personne",
+            "POST /predict-batch": "Prédire pour plusieurs personnes",
+            "GET /health": "Vérifier l'état",
+            "GET /docs": "Documentation interactive"
+        }
+    }
 
-# Entrées utilisateur
-col1, col2 = st.columns(2)
-
-with col1:
-    age = st.number_input("Âge:", min_value=18, max_value=100, value=30)
-
-with col2:
-    salaire = st.number_input("Salaire (€):", min_value=0, max_value=200000, value=50000)
-
-# Bouton de prédiction
-if st.button("Prédire"):
+@app.post("/predict")
+def predict(personne: Personne):
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Modèle non chargé")
+    
     # Préparer et normaliser
-    personne = np.array([[age, salaire]])
-    personne_norm = scaler.transform(personne)
+    data = np.array([[personne.age, personne.salary]])
+    data_normalized = scaler.transform(data)
     
     # Prédire
-    prediction = model.predict(personne_norm)[0]
-    probabilite = model.predict_proba(personne_norm)[0][1]
+    prediction = model.predict(data_normalized)[0]
+    probabilities = model.predict_proba(data_normalized)[0]
     
-    # Afficher résultat
-    st.subheader("Résultat :")
-    if prediction == 1:
-        st.success(f"✅ Cette personne va ACHETER le produit (probabilité: {probabilite*100:.1f}%)")
-    else:
-        st.error(f"❌ Cette personne ne va PAS acheter le produit (probabilité de non-achat: {(1-probabilite)*100:.1f}%)")
+    return {
+        "age": personne.age,
+        "salary": personne.salary,
+        "achat": bool(prediction),
+        "message": "Achètera" if prediction == 1 else "N'achètera pas",
+        "confiance": {
+            "non_achat": round(probabilities[0] * 100, 2),
+            "achat": round(probabilities[1] * 100, 2)
+        }
+    }
+
+@app.post("/predict-batch")
+def predict_batch(personnes: List[Personne]):
+    results = []
+    for personne in personnes:
+        data = np.array([[personne.age, personne.salary]])
+        data_normalized = scaler.transform(data)
+        prediction = model.predict(data_normalized)[0]
+        
+        results.append({
+            "age": personne.age,
+            "salary": personne.salary,
+            "achat": "Oui" if prediction == 1 else "Non"
+        })
     
-    # Barre de progression
-    st.progress(probabilite, text=f"Probabilité d'achat: {probabilite*100:.1f}%")
+    return {"total": len(results), "predictions": results}
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "OK",
+        "model_loaded": model is not None,
+        "scaler_loaded": scaler is not None
+    }
