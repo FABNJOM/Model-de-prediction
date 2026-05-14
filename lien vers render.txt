@@ -1,0 +1,3 @@
+https://github.com/FABNJOM/Model-de-prediction/blob/main/streamlit_app.pyhttps://streamlit-achat.onrender.com
+
+https://streamlit-achat.onrender.com

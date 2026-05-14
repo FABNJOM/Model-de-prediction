@@ -47,11 +47,13 @@ st.info(f"📌 Profil sélectionné : {age} ans, {salaire:,} €")
 if st.button("🔮 Prédire l'achat", type="primary", use_container_width=True):
     with st.spinner("Analyse en cours..."):
         try:
+            # Réveiller Render
+            requests.get("https://api-achat.onrender.com/", timeout=20)
             # Appel à l'API
             response = requests.post(
                 API_URL, 
                 json={"age": age, "salary": salaire},
-                timeout=30
+                timeout=60
             )
             
             if response.status_code == 200:
